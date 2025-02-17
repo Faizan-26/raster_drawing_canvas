@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Paint
+import android.graphics.Bitmap
 
 class RasterDrawingCanvasPlugin: FlutterPlugin, MethodCallHandler {
     private lateinit var channel : MethodChannel
@@ -88,6 +89,31 @@ class RasterDrawingCanvasPlugin: FlutterPlugin, MethodCallHandler {
             "resetCanvasTransformation" -> {
                 drawingView.resetTransform()
                 result.success(null)
+            }
+            "setCanvasColor" -> {
+                val color = call.argument<Number>("color")?.toInt()
+                if (color != null) {
+                    drawingView.setCanvasColor(color)
+                    result.success(null)
+                } else {
+                    result.error("INVALID_ARGUMENT", "Color must be provided", null)
+                }
+            }
+            "saveAsImage" -> {
+                val filePath = call.argument<String>("filePath")
+                val format = call.argument<String>("format")
+                val quality = call.argument<Int>("quality") ?: 100
+
+                if (filePath != null && format != null) {
+                    val success = drawingView.saveAsImage(filePath, format, quality)
+                    if (success) {
+                        result.success(filePath)
+                    } else {
+                        result.error("SAVE_FAILED", "Failed to save image", null)
+                    }
+                } else {
+                    result.error("INVALID_ARGUMENT", "File path and format must be provided", null)
+                }
             }
             else -> {
                 result.notImplemented()

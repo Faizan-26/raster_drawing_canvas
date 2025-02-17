@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:raster_drawing_canvas/drawing_view.dart';
+import 'package:raster_drawing_canvas/core/types.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,7 +30,60 @@ class _DrawingScreenState extends State<DrawingScreen> {
   final RasterDrawingController _controller = RasterDrawingController();
   double _thickness = 5.0;
   Color _selectedColor = Colors.black;
+  Color _canvasColor = Colors.white;
   String _currentTool = 'pen';
+
+  Future<void> _saveImage() async {
+    try {
+      final directory = await getDownloadsDirectory();
+      final String fileName =
+          'drawing_${DateTime.now().millisecondsSinceEpoch}';
+
+      final ImageFormat? format = await showDialog<ImageFormat>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Format'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: ImageFormat.values.map((format) {
+              return ListTile(
+                title: Text(format.name.toUpperCase()),
+                onTap: () => Navigator.pop(context, format),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+
+      if (format == null || directory == null) {
+        throw 'Invalid format or Directory';
+      }
+
+      final String filePath = '${directory.path}/$fileName.${format.name}';
+      final result = await _controller.saveImage(
+        filePath: filePath,
+        format: format,
+        quality: ImageQuality.high,
+      );
+
+      if (result != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Image saved to downloads folder'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to save image')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,10 +97,27 @@ class _DrawingScreenState extends State<DrawingScreen> {
             icon: const Icon(Icons.delete),
             onPressed: _controller.clearCanvas,
           ),
-          // Added button to reset canvas transformation
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _resetTransformations,
+          PopupMenuButton<void>(
+            icon: const Icon(Icons.more_vert),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                child: const ListTile(
+                  leading: Icon(Icons.refresh),
+                  title: Text('Reset Canvas'),
+                ),
+                onTap: _controller.resetCanvasTransformation,
+              ),
+              PopupMenuItem(
+                child: const ListTile(
+                  leading: Icon(Icons.save),
+                  title: Text('Save Image'),
+                ),
+                onTap: () => Future.delayed(
+                  const Duration(milliseconds: 50),
+                  _saveImage,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -84,12 +156,14 @@ class _DrawingScreenState extends State<DrawingScreen> {
                     ),
                   ],
                 ),
-                if (_currentTool != 'eraser')
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      if (_currentTool != 'eraser') ...[
+                        const Text('Brush: '),
+                        const SizedBox(width: 8),
                         for (final color in [
                           Colors.black,
                           Colors.red,
@@ -100,10 +174,22 @@ class _DrawingScreenState extends State<DrawingScreen> {
                           Colors.orange,
                           Colors.pink,
                         ])
-                          _buildColorButton(color),
+                          _buildColorButton(color, false),
                       ],
-                    ),
+                      const SizedBox(width: 16),
+                      const Text('Canvas: '),
+                      const SizedBox(width: 8),
+                      for (final color in [
+                        Colors.white,
+                        Colors.black,
+                        Colors.grey,
+                        Colors.yellowAccent,
+                        Colors.blueAccent,
+                      ])
+                        _buildColorButton(color, true),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -123,13 +209,23 @@ class _DrawingScreenState extends State<DrawingScreen> {
     );
   }
 
-  Widget _buildColorButton(Color color) {
+  Widget _buildColorButton(Color color, bool isCanvasColor) {
+    final isSelected =
+        isCanvasColor ? _canvasColor == color : _selectedColor == color;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
         onTap: () {
-          setState(() => _selectedColor = color);
-          _updateCurrentTool();
+          setState(() {
+            if (isCanvasColor) {
+              _canvasColor = color;
+              _controller.setCanvasColor(color);
+            } else {
+              _selectedColor = color;
+              _updateCurrentTool();
+            }
+          });
         },
         child: Container(
           width: 32,
@@ -138,11 +234,8 @@ class _DrawingScreenState extends State<DrawingScreen> {
             color: color,
             shape: BoxShape.circle,
             border: Border.all(
-              color:
-                  _selectedColor == color
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey,
-              width: _selectedColor == color ? 2 : 1,
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              width: isSelected ? 2 : 1,
             ),
           ),
         ),
@@ -168,9 +261,5 @@ class _DrawingScreenState extends State<DrawingScreen> {
         _controller.setEraser(thickness: _thickness);
         break;
     }
-  }
-
-  void _resetTransformations() {
-    _controller.resetCanvasTransformation();
   }
 }

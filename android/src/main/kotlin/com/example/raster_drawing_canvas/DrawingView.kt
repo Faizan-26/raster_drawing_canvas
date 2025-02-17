@@ -2,9 +2,12 @@ package com.example.raster_drawing_canvas
 
 import android.content.Context
 import android.graphics.*
+import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Stack
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -40,8 +43,8 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
 
     private var currentProperties = PathProperties()
     private val drawPaint = Paint().apply {
-        isAntiAlias = true , 
-        isDither = true, // Dithering affects how colors with higher precision are down-sampled.
+        isAntiAlias = true
+        isDither = true // Dithering affects how colors with higher precision are down-sampled.
     }
 
     var brushType: BrushType = BrushType.NORMAL
@@ -72,6 +75,8 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
     private var oldDist = 1f
     private var oldRotation = 0f
 
+    private var canvasBackgroundColor: Int = Color.WHITE
+
     companion object {
         private const val NONE = 0
         private const val DRAG = 1    // (Not used here since one finger is for drawing.)
@@ -86,7 +91,7 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
         if (!::bitmap.isInitialized || bitmap.width != w || bitmap.height != h) {
             bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             canvasBitmap = Canvas(bitmap)
-            canvasBitmap.drawColor(Color.WHITE)
+            canvasBitmap.drawColor(canvasBackgroundColor)
         }
     }
 
@@ -289,7 +294,7 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
 
     private fun redrawCanvas() {
         // Clear the bitmap and re-draw all paths from the stack.
-        canvasBitmap.drawColor(Color.WHITE)
+        canvasBitmap.drawColor(canvasBackgroundColor)
         for (drawPath in pathStack) {
             drawPaint.applyProperties(drawPath.properties)
             canvasBitmap.drawPath(drawPath.path, drawPaint)
@@ -306,7 +311,7 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
     fun clearCanvas() {
         pathStack.clear()
         redoStack.clear()
-        canvasBitmap.drawColor(Color.WHITE)
+        canvasBitmap.drawColor(canvasBackgroundColor)
         invalidate()
     }
 
@@ -335,5 +340,43 @@ class DrawingView(context: Context, attrs: AttributeSet?) : View(context, attrs)
     fun resetTransform() {
         displayMatrix.reset()
         invalidate()
+    }
+
+    fun setCanvasColor(color: Int) {
+        canvasBackgroundColor = color
+        redrawCanvas()
+    }
+
+    fun saveAsImage(filePath: String, format: String, quality: Int): Boolean {
+        try {
+            val file = File(filePath)
+            FileOutputStream(file).use { out ->
+                val compressFormat = when(format.toLowerCase()) {
+                    "png" -> Bitmap.CompressFormat.PNG
+                    "jpg", "jpeg" -> Bitmap.CompressFormat.JPEG
+                    "webp" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            Bitmap.CompressFormat.WEBP_LOSSLESS
+                        } else {
+                            Bitmap.CompressFormat.WEBP
+                        }
+                    }
+                    "heif" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            @Suppress("DEPRECATION")
+                            Bitmap.CompressFormat.WEBP // Using WEBP as fallback since HEIF is not universally available
+                        } else {
+                            Bitmap.CompressFormat.PNG // Fallback for older Android versions
+                        }
+                    }
+                    else -> Bitmap.CompressFormat.PNG
+                }
+                bitmap.compress(compressFormat, quality, out)
+                return true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
     }
 }

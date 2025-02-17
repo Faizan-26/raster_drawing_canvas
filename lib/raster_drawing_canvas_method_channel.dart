@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:raster_drawing_canvas/core/types.dart';
 
 /// An implementation of [RasterDrawingCanvasPlatform] that uses method channels.
 class MethodChannelRasterDrawingCanvas {
@@ -41,5 +42,25 @@ class MethodChannelRasterDrawingCanvas {
   // reset canvas transformation
   Future<void> resetCanvas() async {
     await methodChannel.invokeMethod<void>('resetCanvasTransformation');
+  }
+
+  Future<String?> saveImage(
+    ImageQuality quality,
+    String filePath,
+    ImageFormat format,
+  ) async {
+    return await methodChannel.invokeMethod<String>('saveAsImage', {
+      'filePath': filePath,
+      'format': format.name,
+      'quality': quality.value,
+    });
+  }
+
+  Future<void> setCanvasColor(int color) async {
+    await methodChannel.invokeMethod<void>('setCanvasColor', {'color': color});
+  }
+
+  void dispose() {
+    methodChannel.setMethodCallHandler(null);
   }
 }

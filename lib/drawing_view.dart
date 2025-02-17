@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:raster_drawing_canvas/core/types.dart';
 import 'raster_drawing_canvas_method_channel.dart';
 
 class RasterDrawingController {
@@ -51,9 +52,12 @@ class RasterDrawingController {
     });
   }
 
-  Future<void> setEraser({required double thickness}) {
+  Future<void> setEraser({
+    required double thickness,
+    Color color = Colors.white,
+  }) {
     return _platform.setBrushProperties({
-      'color': Colors.transparent.value,
+      'color': color.value,
       'strokeWidth': thickness * 2,
       'alpha': 255,
       'blendMode': 'CLEAR',
@@ -64,8 +68,20 @@ class RasterDrawingController {
     });
   }
 
+  Future<void> setCanvasColor(Color color) async {
+    await _platform.setCanvasColor(color.value);
+  }
+
   Future<void> resetCanvasTransformation() async =>
       await _platform.resetCanvas();
+
+  Future<String?> saveImage({
+    required String filePath,
+    required ImageFormat format,
+    ImageQuality quality = ImageQuality.high,
+  }) async {
+    return await _platform.saveImage(quality, filePath, format);
+  }
 }
 
 class RasterDrawingView extends StatefulWidget {
